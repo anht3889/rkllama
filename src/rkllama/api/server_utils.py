@@ -342,6 +342,10 @@ class ChatEndpointHandler(EndpointHandler):
             while not thread_finished or not final_sent:
                 if parent_pipe.poll(timeout):  # Timeout in seconds
                     token = parent_pipe.recv()
+
+                    # Updating expiration date for the model during token generation to prevent expiration
+                    variables.worker_manager_rkllm.update_expiration_date_for_model(model_name)
+
                 else:
                     # Abort the current inference
                     variables.worker_manager_rkllm.workers[model_name].abort_flag.value = True
@@ -704,6 +708,10 @@ class GenerateEndpointHandler(EndpointHandler):
             while not thread_finished or not final_sent:
                 if parent_pipe.poll(timeout):  # Timeout in seconds
                     token = parent_pipe.recv()
+
+                    # Updating expiration date for the model during token generation to prevent expiration
+                    variables.worker_manager_rkllm.update_expiration_date_for_model(model_name)
+
                 else:
                     # Abort the current inference
                     variables.worker_manager_rkllm.workers[model_name].abort_flag.value = True

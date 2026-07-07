@@ -1062,17 +1062,36 @@ class WorkerManager:
             # Send the TASK to the model with the task queue and the pipe to send the response
             self.workers[model_name].task_queue.put((child_conn,) + task)
 
-            # CLose the not needed connection
-            # child_conn.close()
-            
             # Update the worker model info with the invocation
-            self.workers[model_name].worker_model_info.last_call = datetime.now()
-            self.workers[model_name].worker_model_info.expires_at = datetime.now() + timedelta(minutes=int(rkllama.config.get("model", "max_minutes_loaded_in_memory")),)
+            self.update_last_call_for_model(model_name)
 
             # Return the request parent pipe
             return parent_conn
 
         return None
+
+    
+    def update_last_call_for_model(self, model_name):
+        """
+        Update the metadata of a worker with the last time called
+        Args:
+        model_name (str): Model to update
+        """
+        # Update the last call of the model
+        self.workers[model_name].worker_model_info.last_call = datetime.now()
+
+        # Update the expiration of the model
+        self.update_expiration_date_for_model(model_name)
+
+
+    def update_expiration_date_for_model(self, model_name):
+        """
+        Update the metadata of a worker with the expiration date for the model
+        Args:
+        model_name (str): Model to update
+        """
+        # Update the expiration of the model
+        self.workers[model_name].worker_model_info.expires_at = datetime.now() + timedelta(minutes=int(rkllama.config.get("model", "max_minutes_loaded_in_memory")),)
 
 
     def stop_worker(self, model_name, timeout=30):

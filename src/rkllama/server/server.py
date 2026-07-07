@@ -1299,7 +1299,7 @@ def embeddings_ollama():
 def ollama_version():
     """Return a dummy version to be compatible with Ollama clients"""
     return jsonify({
-        "version": "0.0.74"
+        "version": "0.0.75"
     }), 200
 
 
@@ -1587,6 +1587,9 @@ def forward_request_to_llama_cpp_worker(is_openai_request,request):
     logger.debug(f"Routing request to llama.cpp whith this URL: {proxy_route_url} with this data:\n{data}")
 
     try:
+        # Updating last call info for the model to prevent expiration
+        variables.worker_manager_rkllm.update_last_call_for_model(model_name)
+
         # Set the header for the llama-server call
         headers = {
             "Authorization": f"Bearer NOT_IN_USE",
@@ -1623,6 +1626,10 @@ def forward_request_to_llama_cpp_worker(is_openai_request,request):
 
                         # Loop over the chunks returned by llama.cpp
                         for line in response.iter_lines():
+                            
+                            # Updating expiration date for the model during token generation to prevent expiration
+                            variables.worker_manager_rkllm.update_expiration_date_for_model(model_name)
+
                             # Decode the bytes line 
                             line = line.decode("utf-8")
                         
