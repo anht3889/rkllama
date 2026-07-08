@@ -173,6 +173,19 @@ def unload_model(model_name):
     variables.worker_manager_rkllm.stop_worker(model_name)
 
 
+def get_modelfile_system_prompt(model_name):
+    """Return the SYSTEM prompt defined in the model's Modelfile (or "").
+
+    Used as the default system prompt for chat/generate requests. Any system
+    prompt supplied in the API request overrides this value.
+    """
+    raw = get_property_modelfile(model_name, "SYSTEM", rkllama.config.get_path("models"))
+    if not raw:
+        return ""
+    # Strip surrounding whitespace/newline and optional quotes.
+    return raw.strip().strip('"').strip("'")
+
+
 app = Flask(__name__)
 # Enable CORS for all routes
 CORS(app)
@@ -1053,6 +1066,10 @@ def generate_ollama():
         # Remove possible namespace in model name. Ollama API allows namespace/model
         model_name = re.search(r'/(.*)', model_name).group(1) if re.search(r'/', model_name) else model_name
 
+        # Fall back to the Modelfile SYSTEM prompt when none is provided.
+        if not system:
+            system = get_modelfile_system_prompt(model_name)
+
         if DEBUG_MODE:
             logger.debug(f"API generate request data: {data}")
 
@@ -1141,11 +1158,15 @@ def chat_ollama():
         # Get all model options
         options = get_model_full_options(model_name, rkllama.config.get_path("models"), options) 
 
+        # Default system prompt comes from the Modelfile; an API-provided
+        # system message (or top-level 'system' field) overrides it.
+        modelfile_system = get_modelfile_system_prompt(model_name)
+
         # Check if we're starting a new conversation
         # A new conversation is one that doesn't include any assistant messages
         is_new_conversation = not any(msg.get('role') == 'assistant' for msg in messages)
         
-        # Always reset system prompt for new conversations
+        # Reset the persisted system prompt for new conversations
         if is_new_conversation:
             variables.system = ""
             if DEBUG_MODE:
@@ -1171,12 +1192,17 @@ def chat_ollama():
         # Review the images in messages
         images = data.get('images', None)
 
-        # Only use the extracted system message or explicit system parameter if provided
-        if system_in_messages or system:
+        # API system message/field overrides the Modelfile default prompt.
+        if not (system_in_messages or system):
+            system = modelfile_system
+
+        # Drop any system-role entries; the resolved system is handled separately
+        messages = filtered_messages
+
+        if system:
             variables.system = system
-            messages = filtered_messages
             if DEBUG_MODE:
-                logger.debug(f"Using system message: {system}")
+                logger.debug(f"Using system prompt: {system}")
         
         # Load model if needed
         if not variables.worker_manager_rkllm.exists_model_loaded(model_name):    
